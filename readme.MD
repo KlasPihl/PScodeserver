@@ -21,3 +21,5 @@ docker run -it mcr.microsoft.com/azure-powershell pwsh
 [Github aptalca](https://github.com/linuxserver/docker-code-server/blob/master/Dockerfile)
 
 ## Az & Bicep
+1. Azure
+2. Terraform
