@@ -19,3 +19,5 @@ docker run -it mcr.microsoft.com/azure-powershell pwsh
 ## Idea
 
 [Github aptalca](https://github.com/linuxserver/docker-code-server/blob/master/Dockerfile)
+
+## Az & Bicep
