@@ -1,5 +1,8 @@
 FROM codercom/code-server
 
+ARG GITusername="KlasPihl"
+ARG GITuseremail="klas.pihl@atea.se"
+
 #
 # Add PowerShell
 #
@@ -16,16 +19,20 @@ RUN echo ${PS_PACKAGE_URL}
 # Download the Linux package and save it
 ADD ${PS_PACKAGE_URL} /tmp/powershell.deb
 
+
 # Define ENVs for Localization/Globalization
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false \
     LC_ALL=${LANGcode}.UTF-8                          \
     LANG=${LANGcode}.UTF-8                            \
     # set a fixed location for the Module analysis cache
     PSModuleAnalysisCachePath=/var/cache/microsoft/powershell/PSModuleAnalysisCache/ModuleAnalysisCache
-
+USER root
+#Download Azure AZ and Terraform
+RUN curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash && \
+    az bicep install
 
 # Install dependencies and clean up
-USER root
+
 RUN \
     echo "**** install runtime dependencies ****" && \
     apt-get update && \
@@ -34,13 +41,16 @@ RUN \
     locales \
     ca-certificates \
     gss-ntlmssp \
+    wget \
+    gnupg \
+    software-properties-common \
     && apt-get dist-upgrade -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && locale-gen $LANG && update-locale \
     && apt-get install -y /tmp/powershell.deb \
     # remove powershell package
-    #&& rm /tmp/powershell.deb
+    && rm /tmp/powershell.deb \
     #\
     # intialize powershell module cache
     && pwsh -NoLogo -NoProfile -Command " \
@@ -49,30 +59,34 @@ RUN \
         while(!(Test-Path -Path \$env:PSModuleAnalysisCachePath)) { \
         Write-Host "'Waiting for $env:PSModuleAnalysisCachePath'" ; \
         Start-Sleep -Seconds 6 ; \
-        }"
-
+        }" \
+    && git config --global user.name ${GITusername} \
+    && git config --global user.email ${GITuseremail}
+#https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli
+COPY ./terraform.sh /tmp/terraform.sh
+RUN bash /tmp/terraform.sh
 #
 # Add PowerShell extension
 #
+RUN for i in \
+    ms-vscode.azurecli \
+    \ms-vscode.azure-account \
+    \ms-vscode.powershell-preview \
+    \msazurermtools.azurerm-vscode-tools \
+    \ms-azuretools.vscode-azureresourcegroups \
+    \ms-azuretools.vscode-azureterraform \
+    \ms-azuretools.vscode-bicep \
+    \gerane.theme-dimmed-monokai \
+    \usernamehw.errorlens \
+    \ms-azuretools.vscode-docker \
+    \vscode-icons-team.vscode-icons \
+    \hashicorp.terraform \
+    ; do code-server --install-extension "$i" ; done
 
-ARG PS_EXTENSION_VERSION=2022.10.2-preview
-ARG PS_EXTENSION_PACKAGE=powershell-preview-2022.10.2.vsix
 
-#ARG PS_EXTENSION_PACKAGE_URL=https://github.com/PowerShell/vscode-powershell/releases/download/v${PS_EXTENSION_VERSION}/${PS_EXTENSION_PACKAGE}
-ARG PS_EXTENSION_PACKAGE_URL=https://github.com/PowerShell/vscode-powershell/releases/download/v2022.10.2-preview/powershell-preview-2022.10.2.vsix
-
-RUN echo ${PS_EXTENSION_PACKAGE_URL}
-ADD ${PS_EXTENSION_PACKAGE_URL} /tmp/vscode-powershell.zip
-
-RUN pwsh -NoLogo -NoProfile -Command "                                                          \
-    \$ErrorActionPreference = 'Stop' ;                                                          \
-    \$ProgressPreference = 'SilentlyContinue' ;                                                 \
-    Expand-Archive /tmp/vscode-powershell.zip /tmp/vscode-powershell/ ;                         \
-    \$null = New-Item -Force -ItemType Directory ~/.local/share/code-server/extensions/ ;        \
-    Move-Item /tmp/vscode-powershell/extension                                                  \
-        ~/.local/share/code-server/extensions/ms-vscode.powershell-${PS_EXTENSION_VERSION} ;    \
-    Remove-Item -Recurse -Force /tmp/vscode-powershell/                                         \
-    "
+# Set default configuration of VScode
+COPY ./settings.json /root/.local/share/code-server/User/settings.json
+COPY ./settings.json /tmp/
 
 ARG VCS_REF="none"
 ARG IMAGE_NAME=PScodeserver:stable
